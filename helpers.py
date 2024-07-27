@@ -2,17 +2,69 @@ import undetected_chromedriver as uc
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
+import pandas as pd
+import requests
+import os
+import csv
 
 
+def downloadImageSeries(urls, partNumber):
+    i = 1
+    for image_url in urls:
+        path = os.path.join(os.getcwd(), f'images/{partNumber}_image{i}.jpg')
+        download_image(image_url, path)
+        i += 1
+
+def downloadImageSeries(urls, partNumber):
+    i = 1
+    for image_url in urls:
+        path = os.path.join(os.getcwd(), f'images/{partNumber}_image{i}.jpg')
+        download_image(image_url, path)
+        i += 1
+
+def download_image(image_url, save_path):
+    response = requests.get(image_url, stream=True)
+    if response.status_code == 200:
+        with open(save_path, 'wb') as file:
+            for chunk in response.iter_content(1024):
+                file.write(chunk)
+        # print(f"Image successfully downloaded: {save_path}")
+    else:
+        print("Failed to retrieve the image")
+
+
+def getPartNumbers(excel_file_path, sheet_name, column_name):
+    df = pd.read_excel(excel_file_path, sheet_name=sheet_name)
+    
+    if column_name in df.columns:
+        column_data = df[column_name].tolist()
+    else:
+        raise ValueError(f"Column '{column_name}' not found in sheet '{sheet_name}'")
+    
+    return column_data
+
+def write_to_csv(data, directory, filename):
+    fieldnames = []
+    for item in data:
+        for key in item.keys():
+            if key not in fieldnames:
+                fieldnames.append(key)
+
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    
+    filepath = os.path.join(directory, filename)
+    with open(filepath, "w", newline="", encoding="utf-8") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for item in data:
+            writer.writerow(item)
 
 
 def configure_webdriver(
     open_browser=False, block_media=False, block_elements=["css", "img", "js"]
 ):
     options = webdriver.ChromeOptions()
-
-    # Install the extension
-    extension_path = "scraper/utils/pia.crx"
 
     if not open_browser:
         options.add_argument("--headless=new")

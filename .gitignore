@@ -131,3 +131,37 @@ dmypy.json
 *~
 *.sublime-project
 *.sublime-workspace
+
+# Restrict images from being tracked
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.tif
+*.svg
+*.ico
+
+# Restrict other media files
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.flv
+*.mp3
+*.wav
+*.ogg
+*.flac
+*.aac
+
+# Restrict other large binary files
+*.exe
+*.dll
+*.bin
+*.obj
+*.iso
+*.tar
+*.gz
+*.zip
+*.rar
