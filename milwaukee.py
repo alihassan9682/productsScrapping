@@ -1,156 +1,214 @@
 import os
 import time
-import csv
 from helpers import *
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 
+def closePopup(driver):
+    popup = driver.find_element(By.CLASS_NAME, "lead-gen-pop-up")
+    closeBtn = popup.find_element(By.CLASS_NAME, "fill-brandWhite")
+    closeBtn.click()
 
-def getData(driver):
+
+def getImageSeries(partNumber, driver, prodDetails):
     try:
-        productDetails = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "list-group")))
-        items = WebDriverWait(productDetails, 10).until(EC.presence_of_all_elements_located((By.CLASS_NAME, "pull-right")))
-        PartNumber = items[0].text
-        Description = items[1].text
-        tableDetails = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'table-condensed')))
-        tableAttrs = WebDriverWait(tableDetails, 10).until(EC.presence_of_all_elements_located((By.CLASS_NAME, "data-plate-odd")))
-        atrs = [i.find_elements(By.CLASS_NAME, 'ng-star-inserted') for i in tableAttrs]
-        Sellable = atrs[0][-1].text
-        Length = atrs[1][-1].text
-        Weight = atrs[2][-1].text
-        Width = atrs[3][-1].text
-        Height = atrs[4][-1].text
+        swiper = driver.find_element(By.CLASS_NAME, "media-gallery")
+        img_elements = WebDriverWait(swiper, 5).until(
+            EC.presence_of_all_elements_located((By.TAG_NAME, 'img')))
+        if img_elements:
+            print('Downloading Images ......')
+            urls = [i.get_attribute('src') for i in img_elements]
+            for idx, image_url in enumerate(urls, 1):
+                prodDetails[f'image{idx}_url'] = image_url
+                prodDetails[f'image{idx}_name'] = f'{partNumber}_image{idx}.jpg'
+            downloadImageSeries(
+                urls, partNumber)
+            time.sleep(2)
+    except:
+        prodDetails['image1_url'] = "Not available"
+        prodDetails['image1_name'] = "Not available"
+
+
+def getImageUrls(colorElements, partNumber, driver, prodDetails):
+    for element in colorElements:
+        element.click()
+        time.sleep(2)
+        getImageSeries(
+            f'{partNumber}_{element.get_attribute("data-color")}', driver, prodDetails)
+
+
+def getData(driver, PartNumber, usedNumber):
+    try:
+        productTitle = WebDriverWait(
+            driver, 5).until(
+            EC.presence_of_element_located(
+                (By.CLASS_NAME, "product-info__details")))
+        productTitle = productTitle.text.split('\n')[0]
+        productDescription = WebDriverWait(
+            driver, 5).until(
+            EC.presence_of_element_located(
+                (By.CLASS_NAME, "product-info__overview"))).text
+        try:
+            driver.find_element(By.CLASS_NAME, "product-size-options")
+            sizeElements = driver.find_elements(
+                By.CLASS_NAME, 'product-size-option')
+            sizes = [
+                f'Size-{i.get_attribute("data-size")}-({i.get_attribute("data-sku")})' for i in sizeElements]
+        except:
+            sizes = "Not Available"
+
+        try:
+            product_features_element = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.CLASS_NAME, 'product-features')))
+            child_elements = product_features_element.find_elements(
+                By.XPATH, './*')
+            productFeatures = [child.text for child in child_elements]
+            combined_text = ', '.join(productFeatures)
+            productFeatures = combined_text.split('\n')
+        except:
+            productFeatures = "Not available"
+
+        try:
+            specs = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.CLASS_NAME, 'product-specs__table')))
+            specs = specs.find_elements(By.CLASS_NAME, 'product-specs__row ')
+            productSpecifications = [
+                i.text.replace('\n', ' : ') for i in specs]
+        except:
+            productSpecifications = "Not available"
+
         productPageUrl = driver.current_url
 
         prodDetails = {
             'PartNumber': PartNumber,
-            'Description': Description,
-            'Sellable': Sellable,
-            'Length': Length,
-            'Weight': Weight,
-            'Width': Width,
-            'Height': Height,
+            'UsedPartNumber': usedNumber,
+            'ProductTitle': productTitle,
+            'Description': productDescription,
+            "productFeatures": productFeatures,
+            "productSpecifications": productSpecifications,
             'productPageUrl': productPageUrl,
+            "Sizes": sizes,
         }
 
         try:
-            swiper = driver.find_element(By.CLASS_NAME, "swiper-wrapper")
-            img_elements = WebDriverWait(swiper, 10).until(EC.presence_of_all_elements_located((By.TAG_NAME, 'img')))
-            if img_elements:
-                urls = [i.get_attribute('src') for i in img_elements]
-                for idx, image_url in enumerate(urls, 1):
-                    prodDetails[f'image{idx}_url'] = image_url
-                    prodDetails[f'image{idx}_name'] = f'{PartNumber}_image{idx}.jpg'
-                downloadImageSeries(urls, PartNumber)
-            else:
-                prodDetails['image1_url'] = "no image available"
-                prodDetails['image1_name'] = "no image available"
-        except Exception as e:
-            print("Error fetching images:", e)
-            prodDetails['image1_url'] = "no image available"
-            prodDetails['image1_name'] = "no image available"
+            driver.find_element(By.CLASS_NAME, "product-color-options")
+            colorElements = driver.find_elements(
+                By.CLASS_NAME, 'product-color-option')
+            colors = [i.get_attribute('data-color') for i in colorElements]
+            prodDetails["Colors"] = colors
+            getImageUrls(colorElements, PartNumber, driver, prodDetails)
+        except:
+            prodDetails["Colors"] = "Not Available"
+            getImageSeries(PartNumber, driver, prodDetails)
+
+        # print(prodDetails)
 
         return prodDetails
-        
+
     except Exception as e:
         print("Error fetching details:", e)
 
-def getProducts(driver):
-    wait = WebDriverWait(driver, 10)
-    products = wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, "product-info")))
-    PRODUCT = []
-    for i in range(len(products)):
-        products = wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, "product-info")))
-        product = products[i]
-
-        try:
-            WebDriverWait(product, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, '[class="ng-star-inserted"]'))).click()
-            product = getData(driver)
-            if product:
-                # print(product)
-                PRODUCT.append(product)
-            driver.back()
-            time.sleep(2)
-        except Exception as e:
-            print(f"An error occurred: {e}")
-
-    return PRODUCT
 
 def chunk_list(lst, chunk_size):
     """Yield successive chunk_size-sized chunks from lst."""
     for i in range(0, len(lst), chunk_size):
         yield lst[i:i + chunk_size]
 
+
+def searchPartNumber(number, driver):
+    wait = WebDriverWait(driver, 5)
+    searchBtn = driver.find_element(
+        By.CSS_SELECTOR, '[jsname="pkjasb"]')
+    searchBtn.click()
+    search = wait.until(EC.presence_of_element_located(
+        (By.CSS_SELECTOR, '[aria-label="Search"]')))
+    search.send_keys(f'Milwaukee {number}')
+    searchBtn = driver.find_element(
+        By.CSS_SELECTOR, '[jsname="Tg7LZd"]')
+    searchBtn.click()
+    time.sleep(2)
+    page = wait.until(EC.presence_of_element_located(
+        (By.CLASS_NAME, 'VuuXrf')))
+
+    return page
+
+def foundPage(driver, number, usedNumber):
+    try:
+        WebDriverWait(
+            driver, 30).until(
+            EC.presence_of_element_located(
+                (By.CLASS_NAME, "lead-gen-pop-up")))
+        closePopup(driver)
+    except BaseException:
+        pass
+
+    product = getData(driver, number, usedNumber)
+    url = "https://www.google.com/search?q=milwaukee+mxfxc406&oq=Milwaukee+MXFXC406&gs_lcrp=EgZjaHJvbWUqBwgAEAAYgAQyBwgAEAAYgAQyCggBEAAYogQYiQUyCggCEAAYogQYiQWoAgCwAgA&sourceid=chrome&ie=UTF-8"
+    driver.get(url)
+    return product
+    
+
 def scrapData(driver, partNumbers):
-    wait = WebDriverWait(driver, 10)
     all_products = []
 
-    for part_chunk in chunk_list(partNumbers, 100):
+    for part_chunk in chunk_list(partNumbers, 20):
         chunk_products = []
+        product = None
         for number in part_chunk:
+            print(number)
             try:
-                search = wait.until(EC.presence_of_element_located((By.ID, "criteria")))
-                search.clear()
-                search.send_keys(number)
-                searchBtn = driver.find_element(By.CSS_SELECTOR, '[name="search"]')
-                searchBtn.click()
-                time.sleep(2)
-                samples = getProducts(driver)
-                if samples:
-                    chunk_products.extend(samples)
+                usedNumber = number
+                page = searchPartNumber(number, driver)
+
+                if page.text != "Milwaukee Tool":
+                    usedNumber = extract_number_from_code(number)
+                    if usedNumber:
+                        page = searchPartNumber(usedNumber, driver)
+                        if page.text == "Milwaukee Tool":
+                            page.click()
+                            product= foundPage(driver, number, usedNumber)    
+            
+                elif page.text == "Milwaukee Tool":
+                    page.click()
+                    product= foundPage(driver, number, usedNumber)
+                
+                if product:
+                    chunk_products.append(product)
                 else:
                     print("No products found.")
+
+                            
             except Exception as e:
+                url = "https://www.google.com/search?q=milwaukee+mxfxc406&oq=Milwaukee+MXFXC406&gs_lcrp=EgZjaHJvbWUqBwgAEAAYgAQyBwgAEAAYgAQyCggBEAAYogQYiQUyCggCEAAYogQYiQWoAgCwAgA&sourceid=chrome&ie=UTF-8"
+                driver.get(url)
                 print(f"Error during job scraping: {e}")
-        
+
         if chunk_products:
-            write_to_csv(chunk_products, "data", "Products.csv")
-            all_products.extend(chunk_products)
+            write_to_csv1(chunk_products, "data", "milwaukeeProducts.csv")
+            all_products.append(chunk_products)
 
     return all_products
 
-def write_to_csv(data, directory, filename):
-    fieldnames = []
-    for item in data:
-        for key in item.keys():
-            if key not in fieldnames:
-                fieldnames.append(key)
-
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    
-    filepath = os.path.join(directory, filename)
-    file_exists = os.path.isfile(filepath)
-
-    with open(filepath, "a" if file_exists else "w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        if not file_exists:
-            writer.writeheader()
-        for item in data:
-            writer.writerow(item)
 
 def scraping():
-    partNumbers = getPartNumbers('milwaukee.xlsx', 'Part number', 'Selling Part Number')
+    partNumbers = getPartNumbers(
+        'milwaukee.xlsx', 'Part number', 'Selling Part Number')
     try:
         driver = configure_webdriver(True)
         driver.maximize_window()
-        url = "https://www.google.com"
+        url = "https://www.google.com/search?q=milwaukee+mxfxc406&oq=Milwaukee+MXFXC406&gs_lcrp=EgZjaHJvbWUqBwgAEAAYgAQyBwgAEAAYgAQyCggBEAAYogQYiQUyCggCEAAYogQYiQWoAgCwAgA&sourceid=chrome&ie=UTF-8"
         driver.get(url)
-        wait = WebDriverWait(driver, 10)
-        import pdb
-        pdb.set_trace()
-        closeCookie = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '[id="onetrust-accept-btn-handler"]')))
-        closeCookie.click()
-        time.sleep(2)
-
         all_products = scrapData(driver, partNumbers)
         if all_products:
-            write_to_csv(all_products, "data", "All_Products.csv")
+            write_to_csv1(all_products, "data", "All_Milwaukee_Products.csv")
         else:
             print("No products found.")
     except Exception as e:
+        url = "https://www.google.com/search?q=milwaukee+mxfxc406&oq=Milwaukee+MXFXC406&gs_lcrp=EgZjaHJvbWUqBwgAEAAYgAQyBwgAEAAYgAQyCggBEAAYogQYiQUyCggCEAAYogQYiQWoAgCwAgA&sourceid=chrome&ie=UTF-8"
+        driver.get(url)
         print(f"An error occurred: {e}")
+
 
 scraping()
