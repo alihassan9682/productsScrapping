@@ -6,6 +6,7 @@ import pandas as pd
 import requests
 import os
 import csv
+import concurrent.futures
 import shutil
 
 # Set custom WebDriver Manager cache directory
@@ -63,9 +64,21 @@ def write_to_csv1(data, directory, filename):
 def downloadImageSeries(urls, partNumber):
     if not os.path.exists("images"):
         os.makedirs("images")
-    for i, image_url in enumerate(urls, start=1):
-        path = os.path.join(os.getcwd(), f"milwakeImages/{partNumber}_image{i}.jpg")
+
+    def download_task(i, image_url):
+        path = os.path.join(os.getcwd(), f"images/{partNumber}_image{i}.jpg")
         download_image(image_url, path)
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {
+            executor.submit(download_task, i, image_url): image_url
+            for i, image_url in enumerate(urls, start=1)
+        }
+        for future in concurrent.futures.as_completed(futures, timeout=30):
+            try:
+                future.result()
+            except concurrent.futures.TimeoutError:
+                print(f"Download timed out for {futures[future]}")
 
 
 def download_image(image_url, save_path, timeout=10):
